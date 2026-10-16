@@ -73,8 +73,28 @@ dashboard the home page after login, `/dashboard` is protected as well.
   RLS). `app_user` can reach them, but only `lib/auth.js` queries them.
 - Nutrition columns are `not null default 0` so SQL totals never deal with NULLs.
 
-## 4. AI mock mode (Phase 3)
+## 4. AI analysis (Phase 3)
 
-`AI_MOCK=true` makes `lib/analyzeMeal.js` return saved real AI answers (fixtures)
-instead of calling the Claude API, so development and demos cost $0. The plan
-already recommends saving fixtures; this just makes them switchable.
+- **Mock mode:** `AI_MOCK=true|plate|drink|not_food|invalid` swaps the Anthropic client
+  for a fake one that returns a saved answer from `lib/fixtures/`. It goes through the
+  exact same validation/retry path, so every UI state can be tried for $0.
+  `ai-real-plate.json` is a real answer from `claude-haiku-5-5`.
+- **Forced tool call + strict schema + Zod:** `tool_choice` forces `record_meal`;
+  `strict: true` guarantees the JSON *shape*; Zod enforces the *limits* (calories
+  0–3000, grams 0–2000, ≤ 15 items), which the API can't express with strict tools.
+  One retry on invalid output; then the meal is `failed` and the bad answer is kept
+  in `ai_raw`.
+- **Rate limit moved up from Phase 7**, because real API spend starts in Phase 3. It
+  counts rows in a new append-only `ai_calls` table (`002_ai_calls.sql`) instead of
+  `meals`: deleting a meal (including "no food" photos, which are deleted right away)
+  must not hand back a free analysis. Rolling 24-hour window, 30 calls, enforced on
+  both upload and analyze, with a per-user advisory lock so parallel requests can't
+  both slip under the cap. **The dashboard migration becomes `003_dashboard.sql`.**
+- **Claiming a meal:** analyze only runs on a meal with status `analyzing` and no
+  `ai_model` yet, set atomically, so a double-click or replay can't pay twice.
+- **No DB transaction is held open during the AI call** (5–10 s); the work is split
+  into a short "claim" transaction and a short "save" transaction.
+- **Vercel Blob credentials:** `lib/storage.js` passes `BLOB_READ_WRITE_TOKEN`
+  explicitly when it's set, because `vercel link` adds a `VERCEL_OIDC_TOKEN` to
+  `.env.local` that the SDK would otherwise prefer and that Vercel rejects outside
+  deployments. On Vercel, OIDC is used.

@@ -1,6 +1,5 @@
-// /log: TEMPORARY list of your uploaded meals, so Phase 2 can be verified
-// (and so a second account can confirm it sees nothing). Phase 5 replaces this
-// with the real daily log and totals.
+// /log: TEMPORARY list of your meals with their AI totals. Phase 5 replaces this
+// with the real daily log (date picker, per-day totals in your time zone).
 import Link from "next/link";
 import Image from "next/image";
 import { requireUser } from "@/lib/session";
@@ -9,15 +8,30 @@ import LocalTime from "@/components/LocalTime";
 
 export const metadata = { title: "Log · Meal Snap Logger" };
 
+const STATUS_LABELS = {
+  analyzing: "Analyzing…",
+  needs_review: "Needs review",
+  confirmed: "Confirmed",
+  failed: "Analysis failed",
+};
+
 export default async function LogPage() {
   // Middleware already redirects signed-out users; this is the second check
   // (never rely on middleware alone).
   const user = await requireUser("/log");
 
   // No "where user_id = ..." needed: RLS only returns this user's rows.
+  // Totals are summed in SQL, not in JavaScript.
   const meals = await withUser(user.id, async (db) => {
     const { rows } = await db.query(
-      `select id, status, created_at from meals order by created_at desc limit 50`,
+      `select m.id, m.status, m.created_at,
+              count(i.id)::int as item_count,
+              coalesce(sum(i.calories), 0)::int as calories
+         from meals m
+         left join meal_items i on i.meal_id = m.id
+        group by m.id
+        order by m.created_at desc
+        limit 50`,
     );
     return rows;
   });
@@ -50,7 +64,10 @@ export default async function LogPage() {
               />
               <div className="flex flex-col p-2 text-xs">
                 <LocalTime iso={meal.created_at.toISOString()} />
-                <span className="text-foreground/60">{meal.status}</span>
+                <span className="font-medium">
+                  {meal.item_count > 0 ? `${meal.calories} kcal · ${meal.item_count} items` : "—"}
+                </span>
+                <span className="text-foreground/60">{STATUS_LABELS[meal.status] ?? meal.status}</span>
               </div>
             </li>
           ))}

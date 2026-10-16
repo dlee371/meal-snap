@@ -1,0 +1,16 @@
+{
+  "is_food": true,
+  "items": [
+    {
+      "name": "giant pizza",
+      "portion": "the whole thing",
+      "grams": 2500,
+      "calories": 6400,
+      "protein_g": 260,
+      "carbs_g": 720,
+      "fat_g": 280,
+      "confidence": "certain"
+    }
+  ],
+  "notes": "Deliberately invalid: grams, calories and confidence break the Zod rules. Used by tests and AI_MOCK=invalid."
+}

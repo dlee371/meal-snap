@@ -5,6 +5,7 @@ import { getSession } from "@/lib/session";
 import { withUser } from "@/lib/db";
 import { savePhoto, deletePhoto } from "@/lib/storage";
 import { MAX_UPLOAD_BYTES, detectImageType, photoPath } from "@/lib/upload-rules";
+import { DAILY_ANALYSIS_LIMIT, analysesInLast24h, LIMIT_MESSAGE } from "@/lib/usage";
 
 const fail = (status, error) => Response.json({ error }, { status });
 
@@ -13,6 +14,10 @@ export async function POST(request) {
   const session = await getSession();
   if (!session) return fail(401, "Please sign in again.");
   const userId = session.user.id;
+
+  // Every upload is followed by an analysis, so refuse early if the daily cap is used up.
+  const used = await withUser(userId, (db) => analysesInLast24h(db));
+  if (used >= DAILY_ANALYSIS_LIMIT) return fail(429, LIMIT_MESSAGE);
 
   let form;
   try {

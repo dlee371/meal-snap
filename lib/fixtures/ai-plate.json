@@ -1,0 +1,46 @@
+{
+  "is_food": true,
+  "items": [
+    {
+      "name": "grilled chicken breast",
+      "portion": "about 1 palm-sized piece",
+      "grams": 140,
+      "calories": 230,
+      "protein_g": 43,
+      "carbs_g": 0,
+      "fat_g": 5,
+      "confidence": "medium"
+    },
+    {
+      "name": "white rice",
+      "portion": "about 1 cup, cooked",
+      "grams": 160,
+      "calories": 210,
+      "protein_g": 4,
+      "carbs_g": 46,
+      "fat_g": 0,
+      "confidence": "high"
+    },
+    {
+      "name": "steamed broccoli",
+      "portion": "a small handful of florets",
+      "grams": 80,
+      "calories": 28,
+      "protein_g": 2,
+      "carbs_g": 6,
+      "fat_g": 0,
+      "confidence": "high"
+    },
+    {
+      "name": "creamy sauce",
+      "portion": "about 2 tablespoons",
+      "grams": 30,
+      "calories": 90,
+      "protein_g": 1,
+      "carbs_g": 2,
+      "fat_g": 9,
+      "confidence": "low"
+    }
+  ],
+  "notes": "Sauce type is hard to tell from the photo; oil used for cooking is not visible and not counted."
+}

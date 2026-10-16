@@ -1,0 +1,16 @@
+{
+  "is_food": true,
+  "items": [
+    {
+      "name": "iced latte with whole milk",
+      "portion": "1 large cup (about 16 oz)",
+      "grams": 470,
+      "calories": 190,
+      "protein_g": 10,
+      "carbs_g": 15,
+      "fat_g": 10,
+      "confidence": "medium"
+    }
+  ],
+  "notes": "Assumed whole milk and no added syrup; flavoured syrup would add roughly 60-80 kcal."
+}
