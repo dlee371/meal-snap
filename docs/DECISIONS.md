@@ -40,6 +40,17 @@ not UTC.
 The plan's middleware protects `/snap`, `/log`, `/meals`. Since Phase 6 makes the
 dashboard the home page after login, `/dashboard` is protected as well.
 
+## 3b. How auth works without Supabase (Phase 1)
+
+- Migrations live in `db/migrations/` (not `supabase/migrations/`) and are run by hand
+  in the Neon SQL editor. `000_auth.sql` holds Better Auth's tables.
+- Better Auth user ids are `text`, not `uuid`, so our `user_id` columns are `text` too.
+- Middleware runs on the Node.js runtime (stable in Next.js 15.5) so it can look the
+  session up in Postgres and pass on refreshed session cookies. It is only the first
+  gate: protected pages and routes also call `requireUser()` themselves.
+- `?next=` redirects after login are restricted to same-site paths
+  (`lib/safe-redirect.js`) to prevent open redirects.
+
 ## 4. AI mock mode (Phase 3)
 
 `AI_MOCK=true` makes `lib/analyzeMeal.js` return saved real AI answers (fixtures)
