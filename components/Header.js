@@ -16,7 +16,10 @@ export default async function Header() {
 
         {session ? (
           <nav className="flex items-center gap-4 text-sm">
-            {/* More links (Snap, Dashboard) arrive in later phases. */}
+            {/* Dashboard link arrives in Phase 6. */}
+            <Link href="/snap" className="hover:underline">
+              Snap
+            </Link>
             <Link href="/log" className="hover:underline">
               Log
             </Link>

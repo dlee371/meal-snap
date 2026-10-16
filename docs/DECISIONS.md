@@ -51,6 +51,28 @@ dashboard the home page after login, `/dashboard` is protected as well.
 - `?next=` redirects after login are restricted to same-site paths
   (`lib/safe-redirect.js`) to prevent open redirects.
 
+## 3c. Database and uploads (Phase 2)
+
+- **Uploads go through our server** (`POST /api/meals`), not browser → storage directly.
+  The server picks the `<user_id>/<meal_id>.jpg` path and checks the file's first bytes
+  (magic numbers), so users can't write into other folders or upload non-images.
+- **Photos are private Vercel Blobs.** Their URLs return 403 without our token. Browsers
+  only get them via `/api/photos/[id]`, which looks the meal up under RLS and returns the
+  same 404 for "doesn't exist" and "not yours".
+- **Upload limit is 4 MB, not 5 MB**, because Vercel rejects request bodies over 4.5 MB.
+  Photos are compressed to ~1600 px JPEG in the browser first (usually < 1 MB).
+- **HEIC** is accepted by the picker but converted to JPEG in the browser; the server only
+  accepts JPEG/PNG/WebP (Claude can't read HEIC anyway).
+- **Two picker buttons:** "Take photo" (`capture="environment"`) and "Choose from
+  library" (no capture), because `capture` hides the gallery on some phones.
+- **Composite foreign key** `meal_items (meal_id, user_id) → meals (id, user_id)`:
+  foreign-key checks skip RLS, so without it a user could attach items to someone
+  else's meal if they guessed its id.
+- **Auth tables have no per-user RLS.** Better Auth must read sessions and password
+  hashes before it knows who the user is (Supabase likewise keeps `auth.users` outside
+  RLS). `app_user` can reach them, but only `lib/auth.js` queries them.
+- Nutrition columns are `not null default 0` so SQL totals never deal with NULLs.
+
 ## 4. AI mock mode (Phase 3)
 
 `AI_MOCK=true` makes `lib/analyzeMeal.js` return saved real AI answers (fixtures)
