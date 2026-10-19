@@ -54,6 +54,7 @@ export default async function LogPage() {
         <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           {meals.map((meal) => (
             <li key={meal.id} className="overflow-hidden rounded-lg border border-foreground/10">
+              <Link href={`/meals/${meal.id}`} className="block hover:opacity-90">
               <Image
                 src={`/api/photos/${meal.id}`}
                 alt="Meal photo"
@@ -67,8 +68,11 @@ export default async function LogPage() {
                 <span className="font-medium">
                   {meal.item_count > 0 ? `${meal.calories} kcal · ${meal.item_count} items` : "—"}
                 </span>
-                <span className="text-foreground/60">{STATUS_LABELS[meal.status] ?? meal.status}</span>
+                <span className={meal.status === "confirmed" ? "text-foreground/60" : "font-medium text-amber-600"}>
+                  {STATUS_LABELS[meal.status] ?? meal.status}
+                </span>
               </div>
+              </Link>
             </li>
           ))}
         </ul>

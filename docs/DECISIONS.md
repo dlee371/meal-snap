@@ -29,11 +29,28 @@ we deliberately changed it, and why.
 - Everything else (SQL dashboard functions, Zod, forced tool calls, `ai_raw`,
   review/edit step, Recharts) is unchanged.
 
-## 2. Local time zone for "today" (Phase 5/6)
+## 2. Local time zone (cookie added in Phase 4; used again in Phases 5/6)
 
-The plan's SQL functions take only `start_date, end_date`. We add a `tz` argument
-(from a cookie set by the browser) so days are grouped in the user's local time,
-not UTC.
+- `components/TimeZoneSync.js` stores the browser's IANA zone in a `tz` cookie; the
+  server validates it (`lib/timezone.js`) and falls back to UTC.
+- Postgres does every conversion: `to_char(eaten_at at time zone $tz, …)` to show a
+  meal time, and `($local::timestamp at time zone $tz)` to save one. This handles
+  daylight saving correctly and keeps date math out of JavaScript.
+- The plan's SQL functions take only `start_date, end_date`. We add a `tz` argument so
+  days are grouped in the user's local time, not UTC.
+
+## 2b. Review and edit (Phase 4)
+
+- `planItemChanges()` (pure, unit-tested) diffs the saved form against the DB:
+  inserts new rows, deletes removed ones, and updates **only rows whose values
+  changed**, so `user_edited` honestly marks AI guesses the user corrected.
+- The review page shows the AI's original total (from `ai_raw`, which is never
+  edited) next to the corrected total.
+- A save locks the meal row; a late AI answer for a meal the user already saved is
+  stored in `ai_raw` only and never overwrites the user's items.
+- Items are inserted with `clock_timestamp()` so they keep the AI's order (all rows
+  in one transaction would otherwise share the same `now()`).
+- "Delete meal" was added (not in the plan) so failed or wrong uploads can be removed.
 
 ## 3. `/dashboard` is protected too (Phase 1)
 

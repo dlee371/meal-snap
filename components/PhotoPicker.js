@@ -40,6 +40,7 @@ export default function PhotoPicker() {
   const [status, setStatus] = useState("idle");
   const [error, setError] = useState("");
   const [result, setResult] = useState(null); // { items, notes }
+  const [mealId, setMealId] = useState("");
 
   // Free the preview's memory when it's replaced or the component unmounts.
   useEffect(() => () => previewUrl && URL.revokeObjectURL(previewUrl), [previewUrl]);
@@ -49,6 +50,7 @@ export default function PhotoPicker() {
     setPhoto(null);
     setPreviewUrl("");
     setResult(null);
+    setMealId("");
     setError(message);
   }
 
@@ -79,11 +81,12 @@ export default function PhotoPicker() {
 
     // Step 1: upload. On failure, keep the photo so the user can just retry.
     setStatus("uploading");
-    let mealId;
+    let newMealId;
     try {
       const body = new FormData();
       body.append("photo", photo, "meal.jpg");
-      ({ id: mealId } = await postJson("/api/meals", body));
+      ({ id: newMealId } = await postJson("/api/meals", body));
+      setMealId(newMealId);
     } catch (err) {
       setStatus("ready");
       setError(err.message);
@@ -93,7 +96,7 @@ export default function PhotoPicker() {
     // Step 2: analyze. The meal row already exists, so nothing is lost if this fails.
     setStatus("analyzing");
     try {
-      const data = await postJson(`/api/meals/${mealId}/analyze`);
+      const data = await postJson(`/api/meals/${newMealId}/analyze`);
       setResult({ items: data.items, notes: data.notes });
       setStatus("done");
     } catch (err) {
@@ -178,6 +181,16 @@ export default function PhotoPicker() {
           <h2 className="text-lg font-semibold">Here&apos;s what we found</h2>
           <AnalysisResult items={result.items} notes={result.notes} />
         </>
+      )}
+
+      {/* The AI's answer is only a draft: the review page is where it gets fixed and confirmed. */}
+      {(status === "done" || status === "failed") && mealId && (
+        <Link
+          href={`/meals/${mealId}`}
+          className="rounded-md bg-green-600 px-4 py-3 text-center font-medium text-white"
+        >
+          {status === "done" ? "Review & save" : "Add foods by hand"}
+        </Link>
       )}
 
       {(status === "done" || status === "failed") && (

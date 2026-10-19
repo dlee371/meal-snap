@@ -53,12 +53,14 @@ export async function POST(_request, { params }) {
   if (claim.limited) return fail(429, LIMIT_MESSAGE);
   if (claim.notClaimable) return fail(409, "This meal was already analyzed or doesn't exist.");
 
+  // Only touch the status if it's still "analyzing": if the user already saved the
+  // meal by hand while we waited, their work wins.
   const markFailed = (raw) =>
     withUser(userId, (db) =>
-      db.query(`update meals set status = 'failed', ai_raw = $2::jsonb where id = $1`, [
-        mealId,
-        raw ? JSON.stringify(raw) : null,
-      ]),
+      db.query(
+        `update meals set status = 'failed', ai_raw = $2::jsonb where id = $1 and status = 'analyzing'`,
+        [mealId, raw ? JSON.stringify(raw) : null],
+      ),
     );
   const FAILED_MESSAGE = "We couldn't analyze this photo. You can add the foods by hand.";
 
@@ -86,21 +88,31 @@ export async function POST(_request, { params }) {
     return fail(502, FAILED_MESSAGE, { status: "failed" });
   }
 
-  // 4a. Not food: don't save junk. The ai_calls row stays, so it still counts.
-  if (!result.meal.is_food) {
-    await withUser(userId, (db) => db.query("delete from meals where id = $1", [mealId]));
-    await deletePhoto(claim.imagePath).catch(() => {});
-    return fail(422, "No food detected, try another photo.", { notFood: true });
-  }
-
-  // 4b. Save items and the untouched AI answer, then hand over to the review step.
+  // 4. Save the outcome. Lock the meal row first: if the user saved it by hand while
+  //    the AI was thinking (status no longer "analyzing"), keep their version and
+  //    only record the AI's answer in ai_raw.
   const items = result.meal.items;
-  await withUser(userId, async (db) => {
+  const outcome = await withUser(userId, async (db) => {
+    const { rows } = await db.query("select status from meals where id = $1 for update", [mealId]);
+    if (rows[0]?.status !== "analyzing") {
+      await db.query("update meals set ai_raw = $2::jsonb where id = $1", [mealId, JSON.stringify(result.raw)]);
+      return "kept_user_version";
+    }
+
+    // 4a. Not food: don't save junk. The ai_calls row stays, so it still counts.
+    if (!result.meal.is_food) {
+      await db.query("delete from meals where id = $1", [mealId]);
+      return "not_food";
+    }
+
+    // 4b. Save items and the untouched AI answer, then hand over to the review step.
+    // clock_timestamp() (not now(), which is fixed for the whole transaction) gives
+    // each row a distinct created_at, so the review page lists items in the AI's order.
     for (const item of items) {
       await db.query(
         `insert into meal_items
-           (meal_id, user_id, name, portion, grams, calories, protein_g, carbs_g, fat_g, confidence)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+           (meal_id, user_id, name, portion, grams, calories, protein_g, carbs_g, fat_g, confidence, created_at)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, clock_timestamp())`,
         [mealId, userId, item.name, item.portion, item.grams, item.calories,
           item.protein_g, item.carbs_g, item.fat_g, item.confidence],
       );
@@ -109,7 +121,15 @@ export async function POST(_request, { params }) {
       `update meals set status = 'needs_review', ai_raw = $2::jsonb where id = $1`,
       [mealId, JSON.stringify(result.raw)],
     );
+    return "saved";
   });
 
+  if (outcome === "not_food") {
+    await deletePhoto(claim.imagePath).catch(() => {});
+    return fail(422, "No food detected, try another photo.", { notFood: true });
+  }
+  if (outcome === "kept_user_version") {
+    return fail(409, "You already saved this meal, so the AI's answer wasn't applied.");
+  }
   return Response.json({ status: "needs_review", items, notes: result.meal.notes });
 }

@@ -3,6 +3,7 @@
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import Header from "@/components/Header";
+import TimeZoneSync from "@/components/TimeZoneSync";
 import "./globals.css";
 
 export const metadata = {
@@ -18,6 +19,7 @@ export default function RootLayout({ children }) {
       <body
         className={`${GeistSans.variable} ${GeistMono.variable} antialiased min-h-screen`}
       >
+        <TimeZoneSync />
         <Header />
         <main className="mx-auto w-full max-w-3xl px-4 py-6">{children}</main>
       </body>
