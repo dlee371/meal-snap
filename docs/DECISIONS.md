@@ -67,6 +67,30 @@ we deliberately changed it, and why.
   formatted in SQL (`to_char(... at time zone tz)`), so there's no server/browser
   time mismatch.
 
+## 2d. Dashboard (Phase 6)
+
+- **SQL does all aggregation.** `004_dashboard.sql` adds `meal_type_totals`,
+  `top_foods` and a shared `meals_in_range` filter; the page reuses `daily_totals` and
+  computes the 7-day average with a window function (`avg(...) over (rows between 6
+  preceding and current row)`), fetching 6 extra days so the first points have a full
+  window. JavaScript only converts units (grams × 4/4/9) and formats ticks.
+- **The 7-day average skips unlogged days**: averaging a day with nothing logged as
+  0 kcal would say "you ate less" when really you just didn't log. Unlogged days still
+  plot as 0 on the daily line, as the plan requires.
+- **Chart design** follows a validated palette: categorical slots 1–3 (blue, orange,
+  aqua) checked with a colorblind/contrast validator against this app's exact light
+  (#ffffff) and dark (#0a0a0a) backgrounds; dark mode uses its own steps. Single-series
+  charts use one color. One y-axis per chart (calories and its average share the kcal
+  axis). Every chart has a "Show data" table so no value is hover-only.
+- **Dashboard is home after login** (login redirect, `/` and `/login` redirect signed-in
+  users there, logo and nav link).
+- **Demo data:** `npm run seed:demo -- <email> --yes` fills an existing account with
+  ~100 sample meals over 30 days (two empty days, ~25% user-corrected items, today's last
+  meal left for review), using 6 CC0 photos uploaded once and shared by many meals.
+  It runs as `app_user` with RLS and only replaces meals under `<user_id>/demo/`.
+  Because photos can now be shared, deleting a meal only deletes its photo when no
+  other meal uses it.
+
 ## 3. `/dashboard` is protected too (Phase 1)
 
 The plan's middleware protects `/snap`, `/log`, `/meals`. Since Phase 6 makes the

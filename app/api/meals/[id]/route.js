@@ -104,10 +104,15 @@ export async function DELETE(_request, { params }) {
   // RLS: this only deletes the meal if it belongs to the signed-in user.
   const deleted = await withUser(session.user.id, async (db) => {
     const { rows } = await db.query("delete from meals where id = $1 returning image_path", [mealId]);
-    return rows[0];
+    if (rows.length === 0) return null;
+    // Sample (demo) meals share photos, so only remove a photo nobody else uses.
+    const { rows: others } = await db.query("select 1 from meals where image_path = $1 limit 1", [rows[0].image_path]);
+    return { imagePath: rows[0].image_path, shared: others.length > 0 };
   });
   if (!deleted) return fail(404, "Meal not found.");
 
-  await deletePhoto(deleted.image_path).catch((error) => console.error("Photo delete failed:", error));
+  if (!deleted.shared) {
+    await deletePhoto(deleted.imagePath).catch((error) => console.error("Photo delete failed:", error));
+  }
   return Response.json({ ok: true });
 }

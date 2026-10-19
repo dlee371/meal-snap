@@ -1,9 +1,10 @@
 // Runs before matching requests (see `config.matcher` below).
 // 1. Looks up the session in the database (this also refreshes it when needed).
 // 2. Signed out + private page → redirect to /login?next=<page>.
-// 3. Signed in + /login → redirect to the app.
+// 3. Signed in + / or /login → redirect to the dashboard.
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { DEFAULT_AFTER_LOGIN } from "@/lib/safe-redirect";
 
 const PROTECTED_PREFIXES = ["/log", "/snap", "/meals", "/dashboard"];
 
@@ -28,8 +29,9 @@ export async function middleware(request) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("next", pathname + search);
     response = NextResponse.redirect(loginUrl);
-  } else if (session && pathname === "/login") {
-    response = NextResponse.redirect(new URL("/log", request.url));
+  } else if (session && (pathname === "/login" || pathname === "/")) {
+    // Signed-in users skip the landing and login pages and go straight to their dashboard.
+    response = NextResponse.redirect(new URL(DEFAULT_AFTER_LOGIN, request.url));
   } else {
     response = NextResponse.next();
   }
@@ -45,5 +47,5 @@ export const config = {
   // The default "edge" runtime can't use the pg driver.
   runtime: "nodejs",
   // Only run on pages that care about auth; skips static files and /api/auth.
-  matcher: ["/login", "/log/:path*", "/snap/:path*", "/meals/:path*", "/dashboard/:path*"],
+  matcher: ["/", "/login", "/log/:path*", "/snap/:path*", "/meals/:path*", "/dashboard/:path*"],
 };

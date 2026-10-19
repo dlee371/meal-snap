@@ -10,13 +10,15 @@ export default async function Header() {
   return (
     <header className="border-b border-foreground/10">
       <div className="mx-auto flex w-full max-w-3xl items-center justify-between gap-4 px-4 py-3">
-        <Link href={session ? "/log" : "/"} className="font-semibold">
+        <Link href={session ? "/dashboard" : "/"} className="shrink-0 font-semibold">
           Meal Snap
         </Link>
 
         {session ? (
-          <nav className="flex items-center gap-4 text-sm">
-            {/* Dashboard link arrives in Phase 6. */}
+          <nav className="flex items-center gap-3 text-sm sm:gap-4">
+            <Link href="/dashboard" className="hover:underline">
+              Dashboard
+            </Link>
             <Link href="/snap" className="hover:underline">
               Snap
             </Link>
