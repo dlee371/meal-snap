@@ -67,7 +67,7 @@ export default async function MealPage({ params, searchParams }) {
 
   return (
     <section className="flex flex-col gap-4">
-      <Link href="/log" className="text-sm text-foreground/70 hover:underline">
+      <Link href={`/log?date=${meal.eaten_local.slice(0, 10)}`} className="text-sm text-foreground/70 hover:underline">
         ← Back to log
       </Link>
       <h1 className="text-2xl font-bold">Review meal</h1>

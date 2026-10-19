@@ -52,6 +52,21 @@ we deliberately changed it, and why.
   in one transaction would otherwise share the same `now()`).
 - "Delete meal" was added (not in the plan) so failed or wrong uploads can be removed.
 
+## 2c. Daily log (Phase 5)
+
+- **`daily_totals(start_date, end_date, tz)` lives in its own migration,
+  `003_daily_totals.sql`**, because Phase 5 needs it. Phase 6's `meal_type_totals` and
+  `top_foods` go in `004_dashboard.sql`.
+- Groups by the user's local calendar day (`eaten_at at time zone tz`), fills empty
+  days with zeros via `generate_series`, caps ranges at 366 days, and is
+  `security invoker` so RLS still applies (plus an explicit `app.user_id` filter).
+- **Totals count `needs_review` and `confirmed` meals.** An unreviewed AI draft is
+  still food you ate; the log shows a "Review" prompt so it gets corrected.
+  Failed/analyzing meals have no items, so they add nothing.
+- `/log?date=YYYY-MM-DD`; "today" is computed in the user's time zone. Meal times are
+  formatted in SQL (`to_char(... at time zone tz)`), so there's no server/browser
+  time mismatch.
+
 ## 3. `/dashboard` is protected too (Phase 1)
 
 The plan's middleware protects `/snap`, `/log`, `/meals`. Since Phase 6 makes the

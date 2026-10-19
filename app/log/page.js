@@ -1,82 +1,93 @@
-// /log: TEMPORARY list of your meals with their AI totals. Phase 5 replaces this
-// with the real daily log (date picker, per-day totals in your time zone).
+// /log: one day's meals and totals, in the user's local time zone.
+// /log            → today
+// /log?date=2026-10-19 → that day
 import Link from "next/link";
-import Image from "next/image";
 import { requireUser } from "@/lib/session";
 import { withUser } from "@/lib/db";
-import LocalTime from "@/components/LocalTime";
+import { getUserTimeZone } from "@/lib/user-timezone";
+import { todayInTimeZone, isValidDateString, formatLongDate } from "@/lib/dates";
+import DateNav from "@/components/DateNav";
+import DayTotals from "@/components/DayTotals";
+import MealCard from "@/components/MealCard";
 
 export const metadata = { title: "Log · Meal Snap Logger" };
 
-const STATUS_LABELS = {
-  analyzing: "Analyzing…",
-  needs_review: "Needs review",
-  confirmed: "Confirmed",
-  failed: "Analysis failed",
-};
-
-export default async function LogPage() {
-  // Middleware already redirects signed-out users; this is the second check
-  // (never rely on middleware alone).
+export default async function LogPage({ searchParams }) {
+  // Middleware already redirects signed-out users; this is the second check.
   const user = await requireUser("/log");
+  const timeZone = await getUserTimeZone();
+  const today = todayInTimeZone(timeZone);
 
-  // No "where user_id = ..." needed: RLS only returns this user's rows.
-  // Totals are summed in SQL, not in JavaScript.
-  const meals = await withUser(user.id, async (db) => {
-    const { rows } = await db.query(
-      `select m.id, m.status, m.created_at,
-              count(i.id)::int as item_count,
-              coalesce(sum(i.calories), 0)::int as calories
+  // Next.js 15: searchParams is a Promise. Bad or future dates fall back to today.
+  const { date: requested } = await searchParams;
+  const date = isValidDateString(requested) && requested <= today ? requested : today;
+
+  const { totals, meals } = await withUser(user.id, async (db) => {
+    // Totals come from the daily_totals SQL function (003_daily_totals.sql).
+    const { rows: totalRows } = await db.query(
+      "select calories, protein_g, carbs_g, fat_g, meal_count from daily_totals($1, $1, $2)",
+      [date, timeZone],
+    );
+
+    // The day's meals: everything eaten between local midnight and the next local
+    // midnight. RLS limits this to the signed-in user.
+    const { rows: mealRows } = await db.query(
+      `select m.id, m.status, m.meal_type,
+              to_char(m.eaten_at at time zone $2, 'FMHH12:MI AM') as time_local,
+              coalesce(sum(i.calories), 0)::int as calories,
+              string_agg(i.name, ', ' order by i.created_at) as item_names
          from meals m
          left join meal_items i on i.meal_id = m.id
+        where m.eaten_at >= ($1::date::timestamp at time zone $2)
+          and m.eaten_at <  (($1::date + 1)::timestamp at time zone $2)
         group by m.id
-        order by m.created_at desc
-        limit 50`,
+        order by m.eaten_at`,
+      [date, timeZone],
     );
-    return rows;
+    return { totals: totalRows[0], meals: mealRows };
   });
 
+  const isToday = date === today;
+  const toReview = meals.filter((meal) => meal.status !== "confirmed").length;
+
   return (
-    <section className="flex flex-col gap-4">
-      <div>
-        <h1 className="text-2xl font-bold">Your meals</h1>
-        <p className="text-sm text-foreground/70">Signed in as {user.email}</p>
+    <section className="flex flex-col gap-5">
+      <div className="flex flex-col gap-3">
+        <h1 className="text-2xl font-bold">{isToday ? "Today" : formatLongDate(date)}</h1>
+        <DateNav date={date} today={today} />
       </div>
 
-      {meals.length === 0 ? (
-        <p className="text-foreground/70">
-          Nothing logged yet.{" "}
-          <Link href="/snap" className="underline">
-            Snap your first meal.
-          </Link>
+      <DayTotals totals={totals} />
+
+      {toReview > 0 && (
+        <p className="rounded-md bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-300">
+          {toReview === 1 ? "1 meal needs" : `${toReview} meals need`} your review. AI estimates can be off, so
+          check them and save.
         </p>
-      ) : (
-        <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          {meals.map((meal) => (
-            <li key={meal.id} className="overflow-hidden rounded-lg border border-foreground/10">
-              <Link href={`/meals/${meal.id}`} className="block hover:opacity-90">
-              <Image
-                src={`/api/photos/${meal.id}`}
-                alt="Meal photo"
-                width={400}
-                height={300}
-                unoptimized
-                className="aspect-[4/3] w-full object-cover"
-              />
-              <div className="flex flex-col p-2 text-xs">
-                <LocalTime iso={meal.created_at.toISOString()} />
-                <span className="font-medium">
-                  {meal.item_count > 0 ? `${meal.calories} kcal · ${meal.item_count} items` : "—"}
-                </span>
-                <span className={meal.status === "confirmed" ? "text-foreground/60" : "font-medium text-amber-600"}>
-                  {STATUS_LABELS[meal.status] ?? meal.status}
-                </span>
-              </div>
+      )}
+
+      {meals.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-foreground/20 p-6 text-center text-foreground/70">
+          {isToday ? (
+            <>
+              Nothing logged today.{" "}
+              <Link href="/snap" className="font-medium text-foreground underline">
+                Snap your first meal.
               </Link>
-            </li>
+            </>
+          ) : (
+            "Nothing logged on this day."
+          )}
+        </div>
+      ) : (
+        <ul className="flex flex-col gap-2">
+          {meals.map((meal) => (
+            <MealCard key={meal.id} meal={meal} />
           ))}
         </ul>
       )}
+
+      <p className="text-xs text-foreground/50">Estimates only, not medical or dietary advice.</p>
     </section>
   );
 }
